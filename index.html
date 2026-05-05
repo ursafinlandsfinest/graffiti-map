@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>GRAFFITI MAP</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{height:100%;background:#0a0a0a;font-family:'Courier New',monospace;overflow:hidden}
+    #app{position:relative;height:100dvh}
+    #map{width:100%;height:100%}
+
+    /* HEADER */
+    #hdr{position:fixed;top:0;left:0;right:0;z-index:1000;background:rgba(0,0,0,0.92);border-bottom:2px solid #FF5F1F;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:52px}
+    #hdr h1{font-size:clamp(13px,4vw,18px);letter-spacing:3px;color:#FF5F1F;text-transform:uppercase;white-space:nowrap}
+    #hdr small{font-size:9px;color:#555;letter-spacing:1px;display:block;margin-top:1px}
+    .hbtn{padding:8px 11px;background:transparent;border:1px solid #FF5F1F;color:#FF5F1F;cursor:pointer;font-family:'Courier New',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;transition:all .15s;white-space:nowrap;min-height:36px;min-width:36px}
+    .hbtn:hover,.hbtn:active{background:#FF5F1F;color:#000}
+
+    /* SEARCH BAR */
+    #searchbar{position:fixed;top:54px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;width:min(380px,calc(100vw - 16px))}
+    #searchbar input{flex:1;background:rgba(0,0,0,0.9);border:1px solid #333;border-right:none;color:#ddd;padding:9px 12px;font-family:'Courier New',monospace;font-size:13px;outline:none;min-height:40px}
+    #searchbar input:focus{border-color:#FF5F1F}
+    #searchbar input::placeholder{color:#3a3a3a}
+    #searchbar button{background:rgba(0,0,0,0.9);border:1px solid #333;border-left:none;color:#FF5F1F;padding:9px 13px;cursor:pointer;font-family:'Courier New',monospace;font-size:12px;text-transform:uppercase;transition:all .15s;min-height:40px}
+    #searchbar button:hover,#searchbar button:active{background:#FF5F1F;color:#000;border-color:#FF5F1F}
+    #search-result{position:fixed;top:96px;left:50%;transform:translateX(-50%);z-index:1000;background:rgba(0,0,0,0.95);border:1px solid #333;width:min(380px,calc(100vw - 16px));max-height:200px;overflow-y:auto;display:none}
+    .sr-item{padding:11px 13px;font-size:12px;color:#ccc;cursor:pointer;border-bottom:1px solid #1a1a1a;letter-spacing:.5px}
+    .sr-item:hover,.sr-item:active{background:#1a1a1a;color:#FF5F1F}
+
+    /* INFO DRAWER (left) */
+    #info-toggle{position:fixed;top:50%;left:0;transform:translateY(-50%);z-index:1001;background:rgba(0,0,0,0.88);border:1px solid #333;border-left:none;color:#aaa;padding:14px 7px;cursor:pointer;font-size:16px;writing-mode:vertical-lr;letter-spacing:2px;transition:all .15s;min-height:60px;display:flex;align-items:center;justify-content:center}
+    #info-toggle:hover{background:#111;color:#fff}
+    #info-drawer{position:fixed;top:0;left:0;width:min(300px,90vw);height:100%;background:rgba(0,0,0,0.97);border-right:2px solid #333;z-index:1002;transform:translateX(-100%);transition:transform .28s ease;display:flex;flex-direction:column;overflow-y:auto}
+    #info-drawer.open{transform:translateX(0)}
+    #info-drawer-close{align-self:flex-end;background:none;border:none;color:#555;font-size:26px;padding:12px 16px;cursor:pointer;line-height:1}
+    #info-drawer-close:hover{color:#fff}
+    .info-body{padding:0 20px 24px}
+    .info-body h2{font-size:14px;letter-spacing:4px;color:#FF5F1F;text-transform:uppercase;margin-bottom:16px}
+    .info-body p{font-size:12px;color:#888;line-height:1.8;margin-bottom:12px}
+    .info-body .legend{margin-top:16px;border-top:1px solid #1a1a1a;padding-top:16px}
+    .leg-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:11px;color:#777}
+    .leg-dot{width:13px;height:13px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);flex-shrink:0}
+    .info-body .tip{background:#111;border:1px solid #1e1e1e;padding:9px 11px;font-size:11px;color:#666;line-height:1.7;margin-top:14px}
+
+    /* SIDE PANEL (right) */
+    #panel{position:fixed;top:0;right:0;width:min(340px,100vw);height:100%;background:rgba(0,0,0,0.97);border-left:2px solid #FF5F1F;z-index:1003;transform:translateX(100%);transition:transform .28s ease;display:flex;flex-direction:column}
+    #panel.open{transform:translateX(0)}
+    #ph{padding:13px 14px;border-bottom:1px solid #222;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;margin-top:52px}
+    #pt{font-size:12px;letter-spacing:2px;color:#FF5F1F;text-transform:uppercase}
+    #pc{background:none;border:none;color:#555;cursor:pointer;font-size:26px;padding:0 4px;line-height:1;min-width:36px;min-height:36px;display:flex;align-items:center;justify-content:center}
+    #pc:hover{color:#fff}
+    #pb{padding:14px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
+
+    /* FORMS */
+    .fg{margin-bottom:13px}
+    .fg label{display:block;font-size:10px;color:#666;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px}
+    .fg input,.fg textarea,.fg select{width:100%;background:#111;border:1px solid #2a2a2a;color:#ddd;padding:10px 11px;font-family:'Courier New',monospace;font-size:14px;border-radius:0;-webkit-appearance:none}
+    .fg input:focus,.fg textarea:focus{outline:none;border-color:#FF5F1F}
+    .fg textarea{height:70px;resize:vertical}
+    #preview{width:100%;height:180px;background:#111;border:1px dashed #333;display:flex;align-items:center;justify-content:center;color:#444;font-size:12px;margin-bottom:13px;overflow:hidden;cursor:pointer;position:relative}
+    #preview img{width:100%;height:100%;object-fit:contain;background:#0a0a0a}
+    #preview span{text-align:center;padding:10px;line-height:1.6}
+    .cb{background:#111;border:1px solid #1e1e1e;padding:7px 10px;font-size:10px;color:#FF5F1F;letter-spacing:1px;margin-bottom:13px}
+    .cb.teal{color:#0dd;border-color:#0a3a3a}
+
+    /* GRAFFITI CARDS */
+    .gc{border:1px solid #1a1a1a;margin-bottom:11px;overflow:hidden}
+    .gc img{width:100%;max-height:260px;object-fit:contain;background:#0a0a0a;display:block;cursor:zoom-in}
+    .gci{padding:10px;background:#0d0d0d}
+    .gct{font-size:13px;color:#ddd;margin-bottom:3px}
+    .gcm{font-size:10px;color:#555;line-height:1.5}
+    .gca{padding:7px 10px;border-top:1px solid #1a1a1a;display:flex;gap:6px;flex-wrap:wrap}
+
+    /* SPOT INFO */
+    .spot-info{background:#0a1a1a;border:1px solid #0a3a3a;padding:13px;margin-bottom:14px}
+    .spot-info h3{font-size:15px;color:#0dd;letter-spacing:2px;text-transform:uppercase;margin-bottom:7px}
+    .spot-info p{font-size:12px;color:#888;line-height:1.6}
+    .spot-info .si-meta{font-size:10px;color:#444;margin-top:7px}
+
+    /* BUTTONS */
+    .btn{padding:10px 14px;background:transparent;border:1px solid #FF5F1F;color:#FF5F1F;cursor:pointer;font-family:'Courier New',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;transition:all .15s;min-height:40px}
+    .btn:hover,.btn:active{background:#FF5F1F;color:#000}
+    .btn.teal{border-color:#0dd;color:#0dd}
+    .btn.teal:hover,.btn.teal:active{background:#0dd;color:#000}
+    .btn.del{border-color:#e53;color:#e53}
+    .btn.del:hover,.btn.del:active{background:#e53;color:#fff}
+    .btn.sm{font-size:10px;padding:6px 10px;min-height:32px}
+    .btn.full{width:100%}
+
+    /* STATUS */
+    .st{padding:9px;font-size:11px;text-align:center;margin-top:9px;letter-spacing:1px}
+    .st.ok{color:#4a4;border:1px solid #4a4}
+    .st.err{color:#FF5F1F;border:1px solid #FF5F1F}
+
+    /* CODE BOX */
+    .code-box{background:#0a1f0a;border:1px solid #1a4a1a;padding:12px;margin-top:12px;text-align:center}
+    .code-box .code-label{font-size:10px;color:#4a4;letter-spacing:2px;margin-bottom:6px;text-transform:uppercase}
+    .code-box .code-val{font-size:22px;letter-spacing:6px;color:#6f6;font-weight:bold}
+    .code-box .code-note{font-size:10px;color:#4a4;margin-top:6px;line-height:1.5;opacity:.8}
+
+    /* BADGES & MISC */
+    #abadge{display:none;position:fixed;top:54px;left:10px;background:#c33;color:#fff;padding:3px 9px;font-size:10px;letter-spacing:2px;z-index:999;text-transform:uppercase}
+    #hint{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.78);color:#555;padding:5px 14px;font-size:10px;letter-spacing:1px;z-index:999;text-transform:uppercase;pointer-events:none;white-space:nowrap;max-width:90vw;text-align:center}
+    #spotmode-btn{position:fixed;bottom:36px;right:10px;z-index:1000;padding:11px 14px}
+    #spotmode-btn.active{background:#0dd;color:#000;border-color:#0dd}
+    #loading{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.95);padding:20px 32px;border:1px solid #FF5F1F;color:#FF5F1F;font-size:12px;letter-spacing:3px;z-index:9999}
+
+    /* EDIT MODAL */
+    #edit-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:2000;align-items:center;justify-content:center;padding:20px}
+    #edit-modal.open{display:flex}
+    #edit-inner{background:#0d0d0d;border:1px solid #FF5F1F;width:min(320px,100%);padding:20px}
+    #edit-inner h3{font-size:12px;letter-spacing:2px;color:#FF5F1F;text-transform:uppercase;margin-bottom:14px}
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="hdr">
+    <div>
+      <h1>GRAFFITI MAP</h1>
+      <small>DOCUMENT THE STREETS WORLDWIDE</small>
+    </div>
+    <button class="hbtn" id="abtn" onclick="toggleAdmin()">⚙</button>
+  </div>
+
+  <div id="map"></div>
+  <div id="abadge">⚠ ADMIN</div>
+
+  <div id="searchbar">
+    <input id="searchinput" placeholder="62.2426, 25.7473  or  Jyväskylä" onkeydown="if(event.key==='Enter')doSearch()">
+    <button onclick="doSearch()">GO</button>
+  </div>
+  <div id="search-result"></div>
+
+  <!-- INFO TOGGLE -->
+  <button id="info-toggle" onclick="toggleInfo()" title="About this map">ℹ</button>
+
+  <!-- INFO DRAWER -->
+  <div id="info-drawer">
+    <button id="info-drawer-close" onclick="toggleInfo()">×</button>
+    <div class="info-body">
+      <h2>Graffiti Map</h2>
+      <p>A global archive of graffiti art — documenting what has been painted at spots around the world, so nothing is forgotten.</p>
+      <p>When someone paints over an existing piece at a spot, they can upload a photo of the new work. Over time, each spot builds up a visual history of everything that has ever been there.</p>
+      <p>Anyone can upload. Anyone can add spots. The map is open to the whole world.</p>
+      <div class="tip">
+        💡 When you upload a photo, you receive a personal <strong style="color:#FF5F1F">edit code</strong>. Save it — you can use it later to edit or delete your own upload.
+      </div>
+      <div class="legend">
+        <div class="leg-row"><div class="leg-dot" style="background:#FF5F1F;border:1px solid #fff"></div>Graffiti upload</div>
+        <div class="leg-row"><div class="leg-dot" style="background:#0dd;border:1px solid #fff"></div>Named spot</div>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn teal" id="spotmode-btn" onclick="toggleSpotMode()">+ ADD SPOT</button>
+  <div id="hint">CLICK MAP TO ADD · CLICK PIN TO VIEW</div>
+
+  <!-- SIDE PANEL -->
+  <div id="panel">
+    <div id="ph"><span id="pt">ADD</span><button id="pc" onclick="closePanel()">×</button></div>
+    <div id="pb"></div>
+  </div>
+
+  <!-- EDIT MODAL -->
+  <div id="edit-modal">
+    <div id="edit-inner">
+      <h3>Edit Upload</h3>
+      <div class="fg"><label>Your Edit Code</label><input id="edit-code-input" placeholder="e.g. A3F7K2" style="text-transform:uppercase;letter-spacing:3px"></div>
+      <div class="fg"><label>New Title</label><input id="edit-title"></div>
+      <div class="fg"><label>New Description</label><textarea id="edit-desc"></textarea></div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn full" onclick="submitEdit()">SAVE</button>
+        <button class="btn del sm" onclick="submitDelete()">DELETE</button>
+        <button class="btn sm" onclick="closeEditModal()">CANCEL</button>
+      </div>
+      <div id="edit-status"></div>
+    </div>
+  </div>
+
+  <div id="loading">LOADING...</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SB_URL='https://ssblvhdhvrlsycorntgf.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNzYmx2aGRodnJsc3ljb3JudGdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTI2NzQsImV4cCI6MjA5MzU2ODY3NH0.KD0Vd_6sy979WcLbVi3yxBLTxitEGlm5kGrUSYxQK-U';
+const ADMIN_PWD='GRAFFITI2026ADMIN';
+
+const{createClient}=supabase;
+const sb=createClient(SB_URL,SB_KEY);
+let map,isAdmin=false,pendingLL=null,spotMode=false,searchMarker=null;
+let allGraffiti=[],editingId=null;
+let infoOpen=false;
+
+function genCode(){
+  return Math.random().toString(36).slice(2,8).toUpperCase();
+}
+
+function initMap(){
+  map=L.map('map',{center:[20,0],zoom:2,zoomControl:false});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    attribution:'© OpenStreetMap © CartoDB',maxZoom:19
+  }).addTo(map);
+  L.control.zoom({position:'bottomright'}).addTo(map);
+  map.on('click',onMapClick);
+  loadAll();
+}
+
+function makeGraffitiIcon(n){
+  const s=n>1?38:28;
+  const badge=n>1?`<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(45deg);font-size:11px;font-weight:bold;color:#000;font-family:monospace">${n}</span>`:'';
+  return L.divIcon({
+    html:`<div style="width:${s}px;height:${s}px;background:#FF5F1F;border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);position:relative">${badge}</div>`,
+    className:'',iconSize:[s,s],iconAnchor:[s/2,s]
+  });
+}
+
+function makeSpotIcon(name){
+  const label=name.length>16?name.slice(0,16)+'…':name;
+  return L.divIcon({
+    html:`<div style="text-align:center">
+      <div style="width:24px;height:24px;background:#0dd;border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);margin:0 auto"></div>
+      <div style="margin-top:7px;background:rgba(0,0,0,0.88);color:#0dd;font-size:9px;padding:3px 7px;white-space:nowrap;border:1px solid #0a4a4a;letter-spacing:.5px;display:inline-block">${label}</div>
+    </div>`,
+    className:'',iconSize:[100,48],iconAnchor:[50,24]
+  });
+}
+
+async function loadAll(){
+  const[grafRes,spotRes]=await Promise.all([
+    sb.from('graffiti').select('*').order('created_at',{ascending:false}),
+    sb.from('spots').select('*').order('created_at',{ascending:false})
+  ]);
+  document.getElementById('loading').style.display='none';
+  map.eachLayer(l=>{if(l instanceof L.Marker)map.removeLayer(l)});
+  allGraffiti=grafRes.data||[];
+
+  // Group nearby graffiti into clusters
+  const groups=[];
+  allGraffiti.forEach(g=>{
+    for(const gr of groups){
+      if(map.distance([g.lat,g.lng],[gr.lat,gr.lng])<80){gr.items.push(g);return}
+    }
+    groups.push({lat:g.lat,lng:g.lng,items:[g]});
+  });
+  groups.forEach(gr=>{
+    const m=L.marker([gr.lat,gr.lng],{icon:makeGraffitiIcon(gr.items.length),zIndexOffset:0}).addTo(map);
+    m.on('click',e=>{L.DomEvent.stopPropagation(e);showHistory(gr.items,null)});
+  });
+
+  (spotRes.data||[]).forEach(spot=>{
+    const m=L.marker([spot.lat,spot.lng],{icon:makeSpotIcon(spot.name),zIndexOffset:100}).addTo(map);
+    m.on('click',e=>{
+      L.DomEvent.stopPropagation(e);
+      // Match by name (case insensitive) OR by proximity (250m)
+      const nameLower=spot.name.toLowerCase();
+      const matched=allGraffiti.filter(g=>
+        (g.location_name&&g.location_name.toLowerCase()===nameLower)||
+        map.distance([g.lat,g.lng],[spot.lat,spot.lng])<250
+      );
+      // Deduplicate by id
+      const seen=new Set();
+      const deduped=matched.filter(g=>{if(seen.has(g.id))return false;seen.add(g.id);return true});
+      showHistory(deduped,spot);
+    });
+  });
+}
+
+function onMapClick(e){
+  if(infoOpen)return;
+  pendingLL=e.latlng;
+  if(spotMode){showSpotForm(e.latlng);}
+  else{showGraffitiForm(e.latlng);}
+}
+
+function showGraffitiForm(ll){
+  document.getElementById('pt').textContent='ADD GRAFFITI';
+  document.getElementById('pb').innerHTML=`
+    <div class="cb">📍 ${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}</div>
+    <div id="preview" onclick="document.getElementById('fi').click()">
+      <span>TAP TO SELECT IMAGE<br><span style="font-size:10px;color:#333">jpg, png, webp</span></span>
+    </div>
+    <input type="file" id="fi" accept="image/*" style="display:none" onchange="prevImg(this)">
+    <div class="fg"><label>Title</label><input id="ft" placeholder="Piece name..."></div>
+    <div class="fg"><label>Location / Spot Name</label><input id="fl" placeholder="e.g. Killeri"></div>
+    <div class="fg"><label>Your Name (optional)</label><input id="fn" placeholder="Anonymous"></div>
+    <div class="fg"><label>Description</label><textarea id="fd" placeholder="Notes about this piece..."></textarea></div>
+    <button class="btn full" id="ubtn" onclick="doUpload()">UPLOAD TO MAP</button>
+    <div id="ust"></div>`;
+  openPanel();
+}
+
+function showSpotForm(ll){
+  document.getElementById('pt').textContent='ADD SPOT';
+  document.getElementById('pb').innerHTML=`
+    <div class="cb teal">📍 ${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}</div>
+    <div class="fg"><label>Spot Name *</label><input id="sn" placeholder="e.g. Killeri"></div>
+    <div class="fg"><label>Description</label><textarea id="sd" placeholder="Legal wall, tunnel, underpass... any info about the spot"></textarea></div>
+    <div class="fg"><label>Added By (optional)</label><input id="sa" placeholder="Anonymous"></div>
+    <button class="btn teal full" id="sbtn" onclick="doAddSpot()">ADD SPOT TO MAP</button>
+    <div id="sst"></div>`;
+  openPanel();
+}
+
+function prevImg(inp){
+  if(!inp.files[0])return;
+  const r=new FileReader();
+  r.onload=e=>{document.getElementById('preview').innerHTML=`<img src="${e.target.result}" alt="preview">`};
+  r.readAsDataURL(inp.files[0]);
+}
+
+async function doUpload(){
+  const file=document.getElementById('fi').files[0];
+  if(!file){setStatus('ust','Select an image first','err');return}
+  const btn=document.getElementById('ubtn');
+  btn.textContent='UPLOADING...';btn.disabled=true;
+  const code=genCode();
+  try{
+    const ext=file.name.split('.').pop();
+    const fname=`${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const{error:ue}=await sb.storage.from('graffiti-images').upload(fname,file,{contentType:file.type});
+    if(ue)throw ue;
+    const{data:ud}=sb.storage.from('graffiti-images').getPublicUrl(fname);
+    const{error:ie}=await sb.from('graffiti').insert({
+      lat:pendingLL.lat,lng:pendingLL.lng,image_url:ud.publicUrl,
+      title:document.getElementById('ft').value||'Untitled',
+      location_name:document.getElementById('fl').value||'',
+      uploader_name:document.getElementById('fn').value||'Anonymous',
+      description:document.getElementById('fd').value||'',
+      edit_code:code
+    });
+    if(ie)throw ie;
+    document.getElementById('pb').innerHTML=`
+      <div class="st ok">✓ UPLOADED SUCCESSFULLY</div>
+      <div class="code-box">
+        <div class="code-label">Your Edit Code</div>
+        <div class="code-val">${code}</div>
+        <div class="code-note">Save this code! You can use it later<br>to edit or delete your upload.</div>
+      </div>
+      <button class="btn full" style="margin-top:14px" onclick="closePanel();loadAll()">CLOSE</button>`;
+  }catch(e){
+    setStatus('ust','ERROR: '+e.message,'err');
+    btn.textContent='UPLOAD TO MAP';btn.disabled=false;
+  }
+}
+
+async function doAddSpot(){
+  const name=document.getElementById('sn').value.trim();
+  if(!name){setStatus('sst','Spot name is required','err');return}
+  const btn=document.getElementById('sbtn');
+  btn.textContent='SAVING...';btn.disabled=true;
+  const{error}=await sb.from('spots').insert({
+    lat:pendingLL.lat,lng:pendingLL.lng,name,
+    description:document.getElementById('sd').value||'',
+    added_by:document.getElementById('sa').value||'Anonymous'
+  });
+  if(error){setStatus('sst','ERROR: '+error.message,'err');btn.textContent='ADD SPOT TO MAP';btn.disabled=false;return}
+  setStatus('sst','✓ SPOT ADDED!','ok');
+  setTimeout(()=>{closePanel();loadAll();if(spotMode)toggleSpotMode()},1200);
+}
+
+function showHistory(items,spot){
+  document.getElementById('pt').textContent=spot?spot.name:'HISTORY';
+  let html='';
+
+  if(spot){
+    html+=`<div class="spot-info">
+      <h3>${spot.name}</h3>
+      ${spot.description?`<p>${spot.description}</p>`:''}
+      <div class="si-meta">Added by ${spot.added_by} · ${fmtDate(spot.created_at)}</div>
+      ${isAdmin?`<button class="btn del sm full" style="margin-top:10px" onclick="delSpot('${spot.id}')">DELETE SPOT</button>`:''}
+    </div>`;
+  }
+
+  if(items.length===0){
+    html+=`<div style="font-size:11px;color:#444;letter-spacing:1px;text-align:center;padding:24px 0;line-height:2">NO GRAFFITI DOCUMENTED YET<br><span style="font-size:10px;color:#333">Tap near this spot to add a photo</span></div>`;
+  }else{
+    if(!spot){
+      const loc=items.find(i=>i.location_name)?.location_name||'Unknown Location';
+      html+=`<div class="cb">📍 ${loc}<br><span style="font-size:9px;color:#444">${items[0].lat.toFixed(4)}, ${items[0].lng.toFixed(4)}</span></div>`;
+    }
+    html+=`<div style="font-size:10px;color:#555;margin-bottom:12px;letter-spacing:1px">${items.length} PIECE${items.length>1?'S':''} DOCUMENTED</div>`;
+    html+=items.map(g=>`
+      <div class="gc">
+        <img src="${g.image_url}" alt="${escHtml(g.title)}" loading="lazy" onclick="window.open('${g.image_url}','_blank')">
+        <div class="gci">
+          <div class="gct">${escHtml(g.title||'Untitled')}</div>
+          ${g.description?`<div class="gcm" style="color:#888;margin-bottom:3px">${escHtml(g.description)}</div>`:''}
+          <div class="gcm">By ${escHtml(g.uploader_name)} · ${fmtDate(g.created_at)}</div>
+        </div>
+        <div class="gca">
+          <button class="btn sm" onclick="openEditModal('${g.id}','${escHtml(g.title||'')}','${escHtml(g.description||'')}')">✏ EDIT</button>
+          ${isAdmin?`<button class="btn del sm" onclick="delGraffiti('${g.id}')">DELETE</button>`:''}
+        </div>
+      </div>`).join('');
+  }
+  document.getElementById('pb').innerHTML=html;
+  openPanel();
+}
+
+// EDIT MODAL
+function openEditModal(id,title,desc){
+  editingId=id;
+  document.getElementById('edit-title').value=title;
+  document.getElementById('edit-desc').value=desc;
+  document.getElementById('edit-code-input').value='';
+  document.getElementById('edit-status').innerHTML='';
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function closeEditModal(){
+  document.getElementById('edit-modal').classList.remove('open');
+  editingId=null;
+}
+
+async function submitEdit(){
+  const code=document.getElementById('edit-code-input').value.trim().toUpperCase();
+  if(!code){setStatus('edit-status','Enter your edit code','err');return}
+  const{data,error}=await sb.from('graffiti').select('edit_code').eq('id',editingId).single();
+  if(error||!data){setStatus('edit-status','Not found','err');return}
+  if(data.edit_code&&data.edit_code.toUpperCase()!==code){setStatus('edit-status','Wrong code','err');return}
+  const{error:ue}=await sb.from('graffiti').update({
+    title:document.getElementById('edit-title').value||'Untitled',
+    description:document.getElementById('edit-desc').value||''
+  }).eq('id',editingId);
+  if(ue){setStatus('edit-status','Error: '+ue.message,'err');return}
+  setStatus('edit-status','✓ SAVED','ok');
+  setTimeout(()=>{closeEditModal();closePanel();loadAll()},1000);
+}
+
+async function submitDelete(){
+  const code=document.getElementById('edit-code-input').value.trim().toUpperCase();
+  if(!code){setStatus('edit-status','Enter your edit code','err');return}
+  const{data,error}=await sb.from('graffiti').select('edit_code').eq('id',editingId).single();
+  if(error||!data){setStatus('edit-status','Not found','err');return}
+  if(data.edit_code&&data.edit_code.toUpperCase()!==code){setStatus('edit-status','Wrong code','err');return}
+  if(!confirm('Delete this upload permanently?'))return;
+  await sb.from('graffiti').delete().eq('id',editingId);
+  closeEditModal();closePanel();loadAll();
+}
+
+async function delGraffiti(id){
+  if(!confirm('Delete this entry?'))return;
+  await sb.from('graffiti').delete().eq('id',id);
+  closePanel();loadAll();
+}
+
+async function delSpot(id){
+  if(!confirm('Delete this spot?'))return;
+  await sb.from('spots').delete().eq('id',id);
+  closePanel();loadAll();
+}
+
+function toggleSpotMode(){
+  spotMode=!spotMode;
+  const btn=document.getElementById('spotmode-btn');
+  const hint=document.getElementById('hint');
+  if(spotMode){
+    btn.textContent='✕ CANCEL';btn.classList.add('active');
+    hint.textContent='TAP MAP TO PLACE A NEW SPOT';
+    map.getContainer().style.cursor='crosshair';
+  }else{
+    btn.textContent='+ ADD SPOT';btn.classList.remove('active');
+    hint.textContent='CLICK MAP TO ADD · CLICK PIN TO VIEW';
+    map.getContainer().style.cursor='';
+  }
+}
+
+function toggleAdmin(){
+  if(isAdmin){
+    isAdmin=false;
+    document.getElementById('abadge').style.display='none';
+    document.getElementById('abtn').textContent='⚙';
+  }else{
+    const p=prompt('Enter admin password:');
+    if(p===ADMIN_PWD){
+      isAdmin=true;
+      document.getElementById('abadge').style.display='block';
+      document.getElementById('abtn').textContent='EXIT';
+    }else if(p!==null){alert('Wrong password.')}
+  }
+}
+
+function toggleInfo(){
+  infoOpen=!infoOpen;
+  document.getElementById('info-drawer').classList.toggle('open',infoOpen);
+}
+
+// Close info drawer when clicking map
+document.getElementById('map')?.addEventListener('click',()=>{
+  if(infoOpen){toggleInfo()}
+});
+
+function openPanel(){document.getElementById('panel').classList.add('open')}
+function closePanel(){document.getElementById('panel').classList.remove('open')}
+function setStatus(id,msg,type){const e=document.getElementById(id);if(e){e.className='st '+type;e.textContent=msg}}
+function fmtDate(ts){return new Date(ts).toLocaleDateString('fi-FI',{day:'numeric',month:'short',year:'numeric'})}
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+
+async function doSearch(){
+  const inp=document.getElementById('searchinput');
+  const q=inp.value.trim();
+  if(!q)return;
+  const res=document.getElementById('search-result');
+  const coordMatch=q.match(/^(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)$/);
+  if(coordMatch){
+    const lat=parseFloat(coordMatch[1]),lng=parseFloat(coordMatch[2]);
+    if(lat>=-90&&lat<=90&&lng>=-180&&lng<=180){
+      goTo(lat,lng,14);
+      res.style.display='none';
+      inp.value='';
+      inp.blur();
+      return;
+    }
+  }
+  res.style.display='block';
+  res.innerHTML=`<div class="sr-item" style="color:#555">Searching...</div>`;
+  try{
+    const resp=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=json&limit=5');
+    const data=await resp.json();
+    if(!data.length){res.innerHTML=`<div class="sr-item" style="color:#555">No results</div>`;return}
+    res.innerHTML=data.map(d=>`<div class="sr-item" onclick="goTo(${d.lat},${d.lon},14);document.getElementById('search-result').style.display='none';document.getElementById('searchinput').value='';document.getElementById('searchinput').blur()">${d.display_name.split(',').slice(0,3).join(', ')}</div>`).join('');
+  }catch(e){res.innerHTML=`<div class="sr-item" style="color:#e53">Error</div>`}
+}
+
+function goTo(lat,lng,zoom){
+  map.setView([lat,lng],zoom);
+  if(searchMarker)map.removeLayer(searchMarker);
+  searchMarker=L.circleMarker([lat,lng],{radius:14,color:'#FF5F1F',fillColor:'#FF5F1F',fillOpacity:.2,weight:2}).addTo(map);
+  setTimeout(()=>{if(searchMarker){map.removeLayer(searchMarker);searchMarker=null}},4000);
+}
+
+document.addEventListener('click',e=>{
+  const bar=document.getElementById('searchbar');
+  if(bar&&!bar.contains(e.target)){
+    document.getElementById('search-result').style.display='none';
+  }
+});
+
+// Close edit modal on backdrop click
+document.getElementById('edit-modal').addEventListener('click',function(e){
+  if(e.target===this)closeEditModal();
+});
+
+initMap();
+</script>
+</body>
+</html>
