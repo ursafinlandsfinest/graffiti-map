@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GRAFFITI MAP</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    html,body{height:100%;background:#0a0a0a;font-family:'Courier New',monospace}
+    #app{position:relative;height:100vh;overflow:hidden}
+    #map{width:100%;height:100%}
+    #hdr{position:fixed;top:0;left:0;right:0;z-index:1000;background:rgba(0,0,0,0.9);border-bottom:2px solid #FF5F1F;padding:10px 16px;display:flex;align-items:center;justify-content:space-between}
+    #hdr h1{font-size:20px;letter-spacing:5px;color:#FF5F1F;text-transform:uppercase}
+    #hdr small{font-size:10px;color:#555;letter-spacing:2px;display:block;margin-top:2px}
+    .btn{padding:7px 13px;background:transparent;border:1px solid #FF5F1F;color:#FF5F1F;cursor:pointer;font-family:'Courier New',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;transition:all .15s}
+    .btn:hover{background:#FF5F1F;color:#000}
+    .btn.del{border-color:#e53;color:#e53}
+    .btn.del:hover{background:#e53;color:#fff}
+    #panel{position:fixed;top:0;right:0;width:330px;height:100%;background:rgba(0,0,0,0.95);border-left:2px solid #FF5F1F;z-index:1001;transform:translateX(100%);transition:transform .28s ease;display:flex;flex-direction:column}
+    #panel.open{transform:translateX(0)}
+    #ph{padding:13px 14px;border-bottom:1px solid #222;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;margin-top:54px}
+    #pt{font-size:12px;letter-spacing:2px;color:#FF5F1F;text-transform:uppercase}
+    #pc{background:none;border:none;color:#555;cursor:pointer;font-size:24px;padding:0;line-height:1}
+    #pc:hover{color:#fff}
+    #pb{padding:14px;overflow-y:auto;flex:1}
+    .fg{margin-bottom:12px}
+    .fg label{display:block;font-size:10px;color:#666;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px}
+    .fg input,.fg textarea{width:100%;background:#111;border:1px solid #2a2a2a;color:#ddd;padding:7px 9px;font-family:'Courier New',monospace;font-size:13px}
+    .fg input:focus,.fg textarea:focus{outline:none;border-color:#FF5F1F}
+    .fg textarea{height:65px;resize:vertical}
+    #preview{width:100%;height:155px;background:#111;border:1px dashed #333;display:flex;align-items:center;justify-content:center;color:#444;font-size:11px;margin-bottom:12px;overflow:hidden;cursor:pointer}
+    #preview img{width:100%;height:100%;object-fit:cover}
+    .cb{background:#111;border:1px solid #1e1e1e;padding:6px 9px;font-size:10px;color:#FF5F1F;letter-spacing:1px;margin-bottom:12px}
+    .gc{border:1px solid #1a1a1a;margin-bottom:10px;overflow:hidden}
+    .gc img{width:100%;height:165px;object-fit:cover;display:block;cursor:zoom-in}
+    .gci{padding:9px;background:#0d0d0d}
+    .gct{font-size:13px;color:#ddd;margin-bottom:3px}
+    .gcm{font-size:10px;color:#555}
+    .gca{padding:7px 9px;border-top:1px solid #1a1a1a}
+    .st{padding:7px;font-size:11px;text-align:center;margin-top:8px;letter-spacing:1px}
+    .st.ok{color:#4a4;border:1px solid #4a4}
+    .st.err{color:#FF5F1F;border:1px solid #FF5F1F}
+    #abadge{display:none;position:fixed;top:58px;left:10px;background:#c33;color:#fff;padding:3px 8px;font-size:10px;letter-spacing:2px;z-index:999;text-transform:uppercase}
+    #hint{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.75);color:#555;padding:5px 13px;font-size:10px;letter-spacing:1px;z-index:999;text-transform:uppercase;pointer-events:none;white-space:nowrap}
+    #loading{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.95);padding:20px 32px;border:1px solid #FF5F1F;color:#FF5F1F;font-size:12px;letter-spacing:3px;z-index:9999}
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="hdr">
+    <div>
+      <h1>GRAFFITI MAP</h1>
+      <small>DOCUMENT THE STREETS WORLDWIDE</small>
+    </div>
+    <button class="btn" id="abtn" onclick="toggleAdmin()">⚙ ADMIN</button>
+  </div>
+  <div id="map"></div>
+  <div id="abadge">⚠ ADMIN MODE</div>
+  <div id="hint">CLICK MAP TO ADD · CLICK PIN TO VIEW HISTORY</div>
+  <div id="panel">
+    <div id="ph"><span id="pt">ADD GRAFFITI</span><button id="pc" onclick="closePanel()">×</button></div>
+    <div id="pb"></div>
+  </div>
+  <div id="loading">LOADING...</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SB_URL='https://ssblvhdhvrlsycorntgf.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNzYmx2aGRodnJsc3ljb3JudGdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5OTI2NzQsImV4cCI6MjA5MzU2ODY3NH0.KD0Vd_6sy979WcLbVi3yxBLTxitEGlm5kGrUSYxQK-U';
+const ADMIN_PWD='GRAFFITI2026ADMIN'; // Vaihda tämä!
+
+const{createClient}=supabase;
+const sb=createClient(SB_URL,SB_KEY);
+let map,isAdmin=false,pendingLL=null;
+
+function initMap(){
+  map=L.map('map',{center:[20,0],zoom:2,zoomControl:false});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    attribution:'© OpenStreetMap © CartoDB',maxZoom:19
+  }).addTo(map);
+  L.control.zoom({position:'bottomright'}).addTo(map);
+  map.on('click',onMapClick);
+  loadGraffiti();
+}
+
+function makeIcon(n){
+  const s=n>1?36:26;
+  const badge=n>1?`<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(45deg);font-size:10px;font-weight:bold;color:#000;font-family:monospace">${n}</span>`:'';
+  return L.divIcon({
+    html:`<div style="width:${s}px;height:${s}px;background:#FF5F1F;border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);position:relative">${badge}</div>`,
+    className:'',iconSize:[s,s],iconAnchor:[s/2,s],popupAnchor:[0,-s]
+  });
+}
+
+async function loadGraffiti(){
+  const{data,error}=await sb.from('graffiti').select('*').order('created_at',{ascending:false});
+  document.getElementById('loading').style.display='none';
+  if(error||!data)return;
+  map.eachLayer(l=>{if(l instanceof L.Marker)map.removeLayer(l)});
+  const groups=[];
+  data.forEach(g=>{
+    for(const gr of groups){
+      if(map.distance([g.lat,g.lng],[gr.lat,gr.lng])<80){gr.items.push(g);return}
+    }
+    groups.push({lat:g.lat,lng:g.lng,items:[g]});
+  });
+  groups.forEach(gr=>{
+    const m=L.marker([gr.lat,gr.lng],{icon:makeIcon(gr.items.length)}).addTo(map);
+    m.on('click',e=>{L.DomEvent.stopPropagation(e);showHistory(gr.items)});
+  });
+}
+
+function onMapClick(e){pendingLL=e.latlng;showUpload(e.latlng)}
+
+function showUpload(ll){
+  document.getElementById('pt').textContent='ADD GRAFFITI';
+  document.getElementById('pb').innerHTML=`
+    <div class="cb">📍 ${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}</div>
+    <div id="preview" onclick="document.getElementById('fi').click()"><span>CLICK TO SELECT IMAGE</span></div>
+    <input type="file" id="fi" accept="image/*" style="display:none" onchange="prevImg(this)">
+    <div class="fg"><label>Title</label><input id="ft" placeholder="Piece name..."></div>
+    <div class="fg"><label>Location Name</label><input id="fl" placeholder="e.g. Jyväskylä Legal Wall"></div>
+    <div class="fg"><label>Your Name (optional)</label><input id="fn" placeholder="Anonymous"></div>
+    <div class="fg"><label>Description</label><textarea id="fd" placeholder="Notes about this piece..."></textarea></div>
+    <button class="btn" id="ubtn" style="width:100%" onclick="doUpload()">UPLOAD TO MAP</button>
+    <div id="ust"></div>`;
+  openPanel();
+}
+
+function prevImg(inp){
+  if(!inp.files[0])return;
+  const r=new FileReader();
+  r.onload=e=>{document.getElementById('preview').innerHTML=`<img src="${e.target.result}">`};
+  r.readAsDataURL(inp.files[0]);
+}
+
+async function doUpload(){
+  const file=document.getElementById('fi').files[0];
+  if(!file){setStatus('ust','Select an image first','err');return}
+  const btn=document.getElementById('ubtn');
+  btn.textContent='UPLOADING...';btn.disabled=true;
+  try{
+    const ext=file.name.split('.').pop();
+    const fname=`${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const{error:ue}=await sb.storage.from('graffiti-images').upload(fname,file,{contentType:file.type});
+    if(ue)throw ue;
+    const{data:ud}=sb.storage.from('graffiti-images').getPublicUrl(fname);
+    const{error:ie}=await sb.from('graffiti').insert({
+      lat:pendingLL.lat,lng:pendingLL.lng,image_url:ud.publicUrl,
+      title:document.getElementById('ft').value||'Untitled',
+      location_name:document.getElementById('fl').value||'',
+      uploader_name:document.getElementById('fn').value||'Anonymous',
+      description:document.getElementById('fd').value||''
+    });
+    if(ie)throw ie;
+    setStatus('ust','✓ UPLOADED SUCCESSFULLY','ok');
+    setTimeout(()=>{closePanel();loadGraffiti()},1400);
+  }catch(e){
+    setStatus('ust','ERROR: '+e.message,'err');
+    btn.textContent='UPLOAD TO MAP';btn.disabled=false;
+  }
+}
+
+function showHistory(items){
+  const loc=items.find(i=>i.location_name)?.location_name||'Unknown Location';
+  document.getElementById('pt').textContent='HISTORY';
+  document.getElementById('pb').innerHTML=`
+    <div class="cb">📍 ${loc}<br><span style="font-size:9px;color:#444">${items[0].lat.toFixed(4)}, ${items[0].lng.toFixed(4)}</span></div>
+    <div style="font-size:10px;color:#555;margin-bottom:12px;letter-spacing:1px">${items.length} PIECE${items.length>1?'S':''} DOCUMENTED</div>
+    ${items.map(g=>`
+      <div class="gc">
+        <img src="${g.image_url}" alt="${g.title}" loading="lazy" onclick="window.open('${g.image_url}','_blank')">
+        <div class="gci">
+          <div class="gct">${g.title||'Untitled'}</div>
+          ${g.description?`<div class="gcm" style="color:#888;margin-bottom:3px">${g.description}</div>`:''}
+          <div class="gcm">By ${g.uploader_name} · ${fmtDate(g.created_at)}</div>
+        </div>
+        ${isAdmin?`<div class="gca"><button class="btn del" style="width:100%;font-size:10px;padding:5px" onclick="delGraffiti('${g.id}')">DELETE</button></div>`:''}
+      </div>`).join('')}`;
+  openPanel();
+}
+
+async function delGraffiti(id){
+  if(!confirm('Delete this entry?'))return;
+  const{error}=await sb.from('graffiti').delete().eq('id',id);
+  if(error){alert('Error: '+error.message);return}
+  closePanel();loadGraffiti();
+}
+
+function toggleAdmin(){
+  if(isAdmin){
+    isAdmin=false;
+    document.getElementById('abadge').style.display='none';
+    document.getElementById('abtn').textContent='⚙ ADMIN';
+  }else{
+    const p=prompt('Enter admin password:');
+    if(p===ADMIN_PWD){
+      isAdmin=true;
+      document.getElementById('abadge').style.display='block';
+      document.getElementById('abtn').textContent='⚙ EXIT ADMIN';
+    }else if(p!==null){alert('Wrong password.')}
+  }
+}
+
+function openPanel(){document.getElementById('panel').classList.add('open')}
+function closePanel(){document.getElementById('panel').classList.remove('open')}
+function setStatus(id,msg,type){const e=document.getElementById(id);if(e){e.className='st '+type;e.textContent=msg}}
+function fmtDate(ts){return new Date(ts).toLocaleDateString('fi-FI',{day:'numeric',month:'short',year:'numeric'})}
+
+initMap();
+</script>
+</body>
+</html>
